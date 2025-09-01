@@ -4,4 +4,5 @@ MAGMA is your personal consultant for stock trades. It recommends orders for whe
 MAGMA is designed to run locally, and is carefully engineered using a robust system prompt, up-to-date stock data, and complex algorithms.
 It specializes in the tech sector, and prioritizes selected companies within that area to maximize its expertise.
 
-MAGMA only provides <i>suggestions</i> for market orders. Any final decisions are up to the user, and they are responsible for any outcomes.
+MAGMA only provides <i>suggestions</i> for market orders. Any final decisions are up to the user, and they are responsible for any trade outcomes
+if they choose to heed given advice.
