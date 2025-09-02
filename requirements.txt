@@ -1,0 +1,16 @@
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+transformers>=4.41.0
+torch>=2.2.0
+accelerate>=0.31.0
+bitsandbytes>=0.43.0 ; platform_system != "Windows"
+pyyaml>=6.0.1
+yfinance>=0.2.40
+feedparser>=6.0.11
+sqlalchemy>=2.0.30
+pandas>=2.2.2
+numpy>=1.26.4
+scikit-learn>=1.5.0
+beautifulsoup4>=4.12.3
+requests>=2.32.3
+
