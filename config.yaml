@@ -1,0 +1,30 @@
+# MAGMA MVP configuration
+
+server:
+  host: 0.0.0.0
+  port: 8000
+
+data:
+  portfolio_db: ./data/portfolio.db
+  news_cache_db: ./data/news_cache.db
+
+providers:
+  yahoo_finance:
+    enabled: true
+    api_key: ""  # optional for yfinance; left blank
+  news:
+    enabled: true
+    rss_feeds:
+      - https://feeds.a.dj.com/rss/RSSMarketsMain.xml
+      - https://www.investopedia.com/feedbuilder/feed/getfeed?feedName=news
+
+model:
+  provider: huggingface
+  model_path: ./models/phi-3-mini-4k-instruct.Q4_K_M.gguf
+  max_tokens: 512
+  temperature: 0.2
+
+scheduler:
+  premarket_run_utc: "12:30"  # 8:30am ET
+
+
