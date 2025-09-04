@@ -1,3 +1,5 @@
+Welcome to innovation in the individual investment world.
+
 <b> The Market Advisor for Gains using Machine Algorithms (<i>MAGMA</i>)</b>
 
 MAGMA is your personal consultant for stock trades. It should be consulted before the market opens for the day. It suggests moves to make when the market opens, and gives its reasoning behind its choices.
