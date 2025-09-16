@@ -9,9 +9,12 @@ data:
   news_cache_db: ./data/news_cache.db
 
 providers:
-  yahoo_finance:
+  finnhub:
     enabled: true
-    api_key: ""  # optional for yfinance; left blank
+    api_key: "${FINNHUB_API_KEY}"  # set via environment variable
+  twelvedata:
+    enabled: true
+    api_key: "${TWELVEDATA_API_KEY}"  # set via environment variable
   news:
     enabled: true
     rss_feeds:

@@ -9,7 +9,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import feedparser
 import pandas as pd
-import yfinance as yf
+import requests
+import time
 
 try:
 	import yaml  # type: ignore
@@ -31,6 +32,7 @@ def _read_config() -> Dict[str, Any]:
 
 _cfg = _read_config()
 _data_cfg = _cfg.get("data", {}) if isinstance(_cfg, dict) else {}
+_providers_cfg = _cfg.get("providers", {}) if isinstance(_cfg, dict) else {}
 
 # Route prices/fundamentals to portfolio_db; news to news_cache_db
 _PRICES_DB_PATH = os.path.join(_BASE_DIR, "data", "portfolio.db")
@@ -127,43 +129,91 @@ def _utcnow_iso() -> str:
 def fetch_prices(symbols: List[str], period: str = "1y", interval: str = "1d") -> List[PriceBar]:
 	if not symbols:
 		return []
-	data = yf.download(" ".join(symbols), period=period, interval=interval, group_by="ticker", auto_adjust=False, progress=False)
-	bars: List[PriceBar] = []
-	if isinstance(data.columns, pd.MultiIndex):
-		for symbol in symbols:
-			if symbol not in data.columns.levels[0]:
+	# Prefer Finnhub for batch daily prices
+	if isinstance(_providers_cfg, dict) and (_providers_cfg.get("finnhub", {}) or {}).get("enabled", True):
+		return _fetch_prices_finnhub(symbols)
+	# Fallback: Twelve Data daily time series (compact)
+	return _fetch_prices_twelvedata(symbols)
+
+
+def _fetch_prices_finnhub(symbols: List[str]) -> List[PriceBar]:
+	api_key = ((_providers_cfg.get("finnhub", {}) or {}).get("api_key") or os.getenv("FINNHUB_API_KEY", ""))
+	base_url = "https://finnhub.io/api/v1/stock/candle"
+	# Pull last ~100 trading days
+	end = int(time.time())
+	start = end - 120 * 24 * 3600
+	all_bars: List[PriceBar] = []
+	for symbol in symbols:
+		params = {
+			"symbol": symbol,
+			"resolution": "D",
+			"from": start,
+			"to": end,
+			"token": api_key,
+		}
+		try:
+			resp = requests.get(base_url, params=params, timeout=30)
+			resp.raise_for_status()
+			data = resp.json() or {}
+			if data.get("s") != "ok":
 				continue
-			df = data[symbol].reset_index()
-			for _, row in df.iterrows():
-				bars.append(
+			t = data.get("t", [])
+			o = data.get("o", [])
+			h = data.get("h", [])
+			l = data.get("l", [])
+			c = data.get("c", [])
+			v = data.get("v", [])
+			for i in range(min(len(t), len(o), len(h), len(l), len(c), len(v))):
+				date_str = datetime.utcfromtimestamp(int(t[i])).strftime("%Y-%m-%d")
+				all_bars.append(
 					PriceBar(
 						symbol=symbol,
-						date=row["Date"].strftime("%Y-%m-%d"),
-						open=float(row.get("Open", float("nan")) or 0.0),
-						high=float(row.get("High", float("nan")) or 0.0),
-						low=float(row.get("Low", float("nan")) or 0.0),
-						close=float(row.get("Close", float("nan")) or 0.0),
-						adj_close=float(row.get("Adj Close", float("nan")) or 0.0),
-						volume=int(row.get("Volume", 0) or 0),
+						date=date_str,
+						open=float(o[i] or 0.0),
+						high=float(h[i] or 0.0),
+						low=float(l[i] or 0.0),
+						close=float(c[i] or 0.0),
+						adj_close=float(c[i] or 0.0),
+						volume=int(v[i] or 0),
 					)
 				)
-	else:
-		# Single symbol case
-		df = data.reset_index()
-		for _, row in df.iterrows():
-			bars.append(
-				PriceBar(
-					symbol=symbols[0],
-					date=row["Date"].strftime("%Y-%m-%d"),
-					open=float(row.get("Open", float("nan")) or 0.0),
-					high=float(row.get("High", float("nan")) or 0.0),
-					low=float(row.get("Low", float("nan")) or 0.0),
-					close=float(row.get("Close", float("nan")) or 0.0),
-					adj_close=float(row.get("Adj Close", float("nan")) or 0.0),
-					volume=int(row.get("Volume", 0) or 0),
+		except Exception:
+			continue
+	return all_bars
+
+
+def _fetch_prices_twelvedata(symbols: List[str]) -> List[PriceBar]:
+	api_key = ((_providers_cfg.get("twelvedata", {}) or {}).get("api_key") or os.getenv("TWELVEDATA_API_KEY", ""))
+	base_url = "https://api.twelvedata.com/time_series"
+	all_bars: List[PriceBar] = []
+	for symbol in symbols:
+		params = {
+			"symbol": symbol,
+			"interval": "1day",
+			"outputsize": 100,
+			"apikey": api_key,
+		}
+		try:
+			resp = requests.get(base_url, params=params, timeout=30)
+			resp.raise_for_status()
+			payload = resp.json() or {}
+			values = (payload.get("values") or [])
+			for row in values:
+				all_bars.append(
+					PriceBar(
+						symbol=symbol,
+						date=str(row.get("datetime")),
+						open=float(row.get("open", 0.0) or 0.0),
+						high=float(row.get("high", 0.0) or 0.0),
+						low=float(row.get("low", 0.0) or 0.0),
+						close=float(row.get("close", 0.0) or 0.0),
+						adj_close=float(row.get("close", 0.0) or 0.0),
+						volume=int(float(row.get("volume", 0) or 0)),
+					)
 				)
-			)
-	return bars
+		except Exception:
+			continue
+	return all_bars
 
 
 def upsert_prices(bars: List[PriceBar]) -> int:
@@ -201,21 +251,59 @@ def upsert_prices(bars: List[PriceBar]) -> int:
 
 
 def fetch_fundamentals(symbol: str) -> Dict[str, Any]:
-	t = yf.Ticker(symbol)
-	info = t.get_info() or {}
-	fast_info = getattr(t, "fast_info", None)
-	funds: Dict[str, Any] = {**info}
-	if fast_info:
+	# Prefer Finnhub fundamentals (profile + metrics)
+	if isinstance(_providers_cfg, dict) and (_providers_cfg.get("finnhub", {}) or {}).get("enabled", True):
+		api_key = ((_providers_cfg.get("finnhub", {}) or {}).get("api_key") or os.getenv("FINNHUB_API_KEY", ""))
+		profile = {}
 		try:
-			funds.update({
-				"market_cap": getattr(fast_info, "market_cap", None),
-				"trailing_pe": getattr(fast_info, "trailing_pe", None),
-				"forward_pe": getattr(fast_info, "forward_pe", None),
-				"shares": getattr(fast_info, "shares", None),
-			})
+			resp = requests.get("https://finnhub.io/api/v1/stock/profile2", params={"symbol": symbol, "token": api_key}, timeout=20)
+			resp.raise_for_status()
+			profile = resp.json() or {}
 		except Exception:
-			pass
-	return funds
+			profile = {}
+		metrics = {}
+		try:
+			resp = requests.get("https://finnhub.io/api/v1/stock/metric", params={"symbol": symbol, "metric": "all", "token": api_key}, timeout=20)
+			resp.raise_for_status()
+			metrics = (resp.json() or {}).get("metric", {}) or {}
+		except Exception:
+			metrics = {}
+		mapped = {
+			"market_cap": _safe_float(profile.get("marketCapitalization")) or _safe_float(metrics.get("marketCapitalization")),
+			"trailing_pe": _safe_float(metrics.get("peBasicExclExtraTTM")) or _safe_float(metrics.get("peTTM")),
+			"forward_pe": _safe_float(metrics.get("peBasicExclExtraAnnual")) or _safe_float(metrics.get("peForwardAnnual")),
+			"shares": _safe_float(profile.get("shareOutstanding")),
+			"name": profile.get("name"),
+			"sector": profile.get("finnhubIndustry"),
+		}
+		return {k: v for k, v in mapped.items() if v is not None}
+	# Fallback: minimal fundamentals via Twelve Data (quote only)
+	api_key = ((_providers_cfg.get("twelvedata", {}) or {}).get("api_key") or os.getenv("TWELVEDATA_API_KEY", ""))
+	try:
+		resp = requests.get("https://api.twelvedata.com/quote", params={"symbol": symbol, "apikey": api_key}, timeout=20)
+		resp.raise_for_status()
+		q = resp.json() or {}
+		mapped = {
+			"market_cap": _safe_float(q.get("market_cap")),
+			"name": q.get("name"),
+		}
+		return {k: v for k, v in mapped.items() if v is not None}
+	except Exception:
+		return {}
+
+
+def _safe_int(x: Any) -> Optional[int]:
+	try:
+		return int(float(x))
+	except Exception:
+		return None
+
+
+def _safe_float(x: Any) -> Optional[float]:
+	try:
+		return float(x)
+	except Exception:
+		return None
 
 
 def upsert_fundamentals(symbol: str, fundamentals: Dict[str, Any]) -> int:

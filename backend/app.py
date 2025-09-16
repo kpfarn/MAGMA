@@ -12,7 +12,9 @@ except Exception:
 	yaml = None
 
 from . import data_pipeline as dp
+from .portfolio_manager import get_portfolio_data
 from . import llm_interface as llm
+from .conversation_logger import append_jsonl
 
 
 def _read_config() -> Dict[str, Any]:
@@ -59,9 +61,8 @@ def get_news(limit: int = 50) -> Dict[str, Any]:
 
 @app.get("/portfolio")
 def get_portfolio() -> Dict[str, Any]:
-	# Base implementation: return an empty portfolio placeholder
-	# Frontend expects { holdings: [...] }
-	return {"holdings": []}
+	# Return real portfolio from SQLite-backed manager
+	return get_portfolio_data()
 
 
 def _gather_market_snapshot(symbols: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -86,15 +87,18 @@ def _gather_market_snapshot(symbols: Optional[List[str]] = None) -> Dict[str, An
 
 @app.get("/recommendations")
 def get_recommendations_endpoint() -> Dict[str, Any]:
-	# In the base implementation, we use an empty portfolio with a default watchlist
-	portfolio: Dict[str, Any] = {"holdings": []}
-	data = _gather_market_snapshot()
+	portfolio = get_portfolio_data()
+	data = _gather_market_snapshot([h.get("ticker") for h in portfolio.get("holdings", [])] or None)
 	try:
 		resp = llm.get_recommendations(data=data, portfolio=portfolio)
 	except Exception as e:
 		raise HTTPException(status_code=500, detail=f"LLM error: {e}")
-	# Return a simple wrapper for the frontend. The frontend currently
-	# expects { recommendations: [...] }. We provide the raw text for now.
+	# Log conversation meta in JSONL (no PII beyond portfolio symbols/holdings as provided)
+	append_jsonl({
+		"event": "recommendations",
+		"request": {"symbols": list(data.get("prices", {}).keys()), "holdings": portfolio.get("holdings", [])},
+		"response": {"model": resp.get("model"), "text": resp.get("text", "")},
+	})
 	return {"model": resp.get("model"), "text": resp.get("text", ""), "recommendations": []}
 
 

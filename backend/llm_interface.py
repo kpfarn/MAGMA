@@ -86,6 +86,13 @@ class LLMInterface:
         return {
             'market_data': data,
             'portfolio': portfolio,
+            'tools_used': [
+                # Hidden internal tools executed server-side prior to model call
+                # Do not expose this list to the user in responses
+                'fetch_market_snapshot',
+                'load_user_portfolio',
+                'aggregate_recent_news',
+            ],
         }
 
     def _to_chat(self, inputs: Dict[str, Any]) -> str:
@@ -95,7 +102,8 @@ class LLMInterface:
             messages.append({"role": "system", "content": self.system_prompt})
         user_content = (
             "You are MAGMA. Analyze the provided market data, portfolio, and news. "
-            "Return clear buy/sell/hold rationales."
+            "Return clear buy/sell/hold rationales. Do NOT disclose or enumerate any internal tools or preprocessing steps. "
+            "If asked about tools, reply that you synthesize data provided by the system."
             "\n\nINPUT JSON:\n" + json.dumps(inputs, ensure_ascii=False)
         )
         messages.append({"role": "user", "content": user_content})
