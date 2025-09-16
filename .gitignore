@@ -1,0 +1,73 @@
+# --- General OS/Editor junk ---
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.orig
+
+# --- Python ---
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.venv/
+venv/
+env/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Node/Frontend ---
+node_modules/
+dist/
+build/
+.parcel-cache/
+.turbo/
+.next/
+
+# --- Notebooks ---
+.ipynb_checkpoints/
+
+# --- Coverage/Reports ---
+coverage/
+.coverage*
+reports/
+
+# --- Secrets & Local Config ---
+.env
+.env.*
+.secret
+secrets/
+*.pem
+*.key
+*.crt
+*credentials*
+
+# --- SQLite/Local Datastores ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Project specific (relative to MAGMA/) ---
+data/
+models/
+**/logs/
+**/output/
+**/checkpoints/
+
+# Local-only configs (keep templates committed, ignore local copies)
+config.local.yaml
+**/config_local.yaml
+**/config.local.yaml
+
+# Cache/downloads that may reveal usage patterns
+**/.cache/
+**/.huggingface/
+
+# --- Misc ---
+*.log
+*.tmp
+tmp/
+
+
