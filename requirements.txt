@@ -1,9 +1,9 @@
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
 transformers>=4.41.0
-torch>=2.2.0
+torch>=2.2.0+cpu --index-url https://download.pytorch.org/whl/cpu
 accelerate>=0.31.0
-bitsandbytes>=0.43.0 ; platform_system != "Windows"
+# bitsandbytes>=0.43.0 ; platform_system != "Windows"  # Removed for space savings
 pyyaml>=6.0.1
 finnhub-python>=2.4.19
 twelvedata>=1.2.11
@@ -11,7 +11,7 @@ feedparser>=6.0.11
 sqlalchemy>=2.0.30
 pandas>=2.2.2
 numpy>=1.26.4
-scikit-learn>=1.5.0
+# scikit-learn>=1.5.0  # Removed for space savings - not needed for basic functionality
 beautifulsoup4>=4.12.3
 requests>=2.32.3
 

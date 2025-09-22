@@ -23,7 +23,7 @@ providers:
 
 model:
   provider: huggingface
-  model_path: ./models/phi-3-mini-4k-instruct.Q4_K_M.gguf
+  model_id: microsoft/DialoGPT-small  # Much smaller model (~350MB vs 2.3GB)
   max_tokens: 512
   temperature: 0.2
 

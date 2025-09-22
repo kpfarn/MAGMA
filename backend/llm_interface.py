@@ -60,27 +60,26 @@ class LLMInterface:
             self.system_prompt = ''
 
     def load(self) -> None:
-        load_kwargs: Dict[str, Any] = {"device_map": "auto"}
+        # Optimized for minimal disk usage
+        load_kwargs: Dict[str, Any] = {
+            "device_map": "cpu",  # Force CPU usage to save space
+            "torch_dtype": torch.float16,  # Use half precision to save memory
+            "low_cpu_mem_usage": True,  # Optimize memory usage
+        }
 
-        if _HAS_BNB:
-            try:
-                bnb_config = BitsAndBytesConfig(
-                    load_in_4bit=True,
-                    bnb_4bit_use_double_quant=True,
-                    bnb_4bit_quant_type='nf4',
-                    bnb_4bit_compute_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-                )
-                load_kwargs.update({
-                    'quantization_config': bnb_config,
-                    'torch_dtype': torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-                })
-            except Exception:
-                load_kwargs['torch_dtype'] = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-        else:
-            load_kwargs['torch_dtype'] = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-
+        # Skip BitsAndBytes quantization to save space
+        # Use dynamic quantization instead if needed
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_id, use_fast=True)
         self.model = AutoModelForCausalLM.from_pretrained(self.model_id, **load_kwargs)
+        
+        # Apply dynamic quantization to reduce model size
+        try:
+            self.model = torch.quantization.quantize_dynamic(
+                self.model, {torch.nn.Linear}, dtype=torch.qint8
+            )
+        except Exception:
+            # If quantization fails, continue without it
+            pass
 
     def _build_inputs(self, data: Dict[str, Any], portfolio: Dict[str, Any]) -> Dict[str, Any]:
         return {
