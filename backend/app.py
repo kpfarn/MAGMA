@@ -69,6 +69,11 @@ def _gather_market_snapshot(symbols: Optional[List[str]] = None) -> Dict[str, An
 	# Pick a small default watchlist if no symbols provided
 	symbols = symbols or ["AAPL", "MSFT", "GOOG", "AMZN"]
 	prices = dp.fetch_prices(symbols=symbols, period="1mo", interval="1d")
+	# Persist fetched prices so portfolio PnL can use latest closes
+	try:
+		dp.upsert_prices(prices)
+	except Exception:
+		pass
 	# Convert to dicts grouped by symbol
 	buckets: Dict[str, List[Dict[str, Any]]] = {}
 	for b in prices:
@@ -83,6 +88,32 @@ def _gather_market_snapshot(symbols: Optional[List[str]] = None) -> Dict[str, An
 		})
 	news = dp.get_latest_news(limit=50)
 	return {"prices": buckets, "news": news}
+
+
+@app.post("/refresh")
+def refresh_data(symbols: Optional[List[str]] = None) -> Dict[str, Any]:
+	# Determine symbols from request, holdings, or default list
+	if not symbols:
+		portfolio = get_portfolio_data()
+		holdings = [h.get("ticker") for h in portfolio.get("holdings", []) if h.get("ticker")]
+		symbols = holdings or ["AAPL", "MSFT", "GOOG", "AMZN"]
+	# Fetch and upsert prices
+	price_bars = dp.fetch_prices(symbols=symbols, period="3mo", interval="1d")
+	price_changes = dp.upsert_prices(price_bars)
+	# Fetch and upsert fundamentals
+	fund_changes_total = 0
+	for s in symbols:
+		fundamentals = dp.fetch_fundamentals(s)
+		fund_changes_total += dp.upsert_fundamentals(s, fundamentals)
+	# Fetch and upsert recent news
+	news_entries = dp.fetch_news_rss(symbols=symbols)
+	news_changes = dp.upsert_news(news_entries)
+	return {
+		"symbols": symbols,
+		"prices_upserted": int(price_changes),
+		"fundamentals_upserted": int(fund_changes_total),
+		"news_upserted": int(news_changes),
+	}
 
 
 @app.get("/recommendations")
@@ -107,76 +138,3 @@ if __name__ == "__main__":
 	host = str(server_cfg.get("host", "0.0.0.0"))
 	port = int(server_cfg.get("port", 8000))
 	uvicorn.run("MAGMA.backend.app:app", host=host, port=port, reload=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
