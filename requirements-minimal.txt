@@ -1,0 +1,30 @@
+# Minimal requirements for MAGMA - optimized for disk space
+# Total estimated size: ~3-4 GB (vs 12-15 GB original)
+
+# Core web framework
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+
+# CPU-only PyTorch (saves ~2GB vs CUDA version)
+torch>=2.2.0+cpu --index-url https://download.pytorch.org/whl/cpu
+
+# Essential ML libraries
+transformers>=4.41.0
+accelerate>=0.31.0
+
+# Configuration
+pyyaml>=6.0.1
+
+# Data APIs
+finnhub-python>=2.4.19
+twelvedata>=1.2.11
+
+# Data processing (minimal)
+feedparser>=6.0.11
+sqlalchemy>=2.0.30
+pandas>=2.2.2
+numpy>=1.26.4
+
+# Web scraping
+beautifulsoup4>=4.12.3
+requests>=2.32.3
