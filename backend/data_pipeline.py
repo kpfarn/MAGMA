@@ -306,6 +306,18 @@ def _safe_float(x: Any) -> Optional[float]:
 		return None
 
 
+def _coerce_value(value: Any) -> Any:
+	if value is None:
+		return None
+	try:
+		number = _safe_float(value)
+	except Exception:
+		number = None
+	if number is None:
+		return value
+	return int(number) if float(number).is_integer() else float(number)
+
+
 def upsert_fundamentals(symbol: str, fundamentals: Dict[str, Any]) -> int:
 	if not fundamentals:
 		return 0
@@ -417,6 +429,34 @@ def get_latest_news(limit: int = 50) -> List[Dict[str, Any]]:
 		return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
+def get_fundamentals(symbols: Optional[List[str]] = None) -> Dict[str, Dict[str, Any]]:
+	"""
+	Return the latest fundamental key/value snapshot for the requested symbols.
+
+	Values are coerced into floats/ints when possible so downstream consumers can
+	easily compute ratios without additional parsing.
+	"""
+	_init_prices_db()
+	query = "SELECT symbol, key, value, as_of FROM fundamentals"
+	params: Tuple[Any, ...] = ()
+	if symbols:
+		placeholders = ",".join("?" for _ in symbols)
+		query += f" WHERE symbol IN ({placeholders})"
+		params = tuple(s.upper().strip() for s in symbols)
+	query += " ORDER BY symbol ASC"
+
+	results: Dict[str, Dict[str, Any]] = {}
+	with _db(_PRICES_DB_PATH) as conn:
+		cur = conn.execute(query, params)
+		for symbol, key, value, as_of in cur.fetchall():
+			if not symbol or not key:
+				continue
+			symbol = symbol.upper().strip()
+			entry = results.setdefault(symbol, {"as_of": as_of})
+			entry[key] = _coerce_value(value)
+	return results
+
+
 __all__ = [
 	"fetch_prices",
 	"upsert_prices",
@@ -426,4 +466,5 @@ __all__ = [
 	"upsert_news",
 	"get_latest_prices",
 	"get_latest_news",
+	"get_fundamentals",
 ]

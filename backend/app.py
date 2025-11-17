@@ -87,7 +87,8 @@ def _gather_market_snapshot(symbols: Optional[List[str]] = None) -> Dict[str, An
 			"volume": b.volume,
 		})
 	news = dp.get_latest_news(limit=50)
-	return {"prices": buckets, "news": news}
+	fundamentals = dp.get_fundamentals(symbols=symbols)
+	return {"prices": buckets, "news": news, "fundamentals": fundamentals}
 
 
 @app.post("/refresh")
