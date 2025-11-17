@@ -13,7 +13,10 @@ except Exception:
 
 from . import data_pipeline as dp
 from .portfolio_manager import get_portfolio_data
-from . import llm_interface as llm
+try:
+	from . import llm_interface as llm
+except ImportError:
+	llm = None
 from .conversation_logger import append_jsonl
 
 
@@ -119,6 +122,8 @@ def refresh_data(symbols: Optional[List[str]] = None) -> Dict[str, Any]:
 
 @app.get("/recommendations")
 def get_recommendations_endpoint() -> Dict[str, Any]:
+	if llm is None:
+		raise HTTPException(status_code=503, detail="LLM module not available (torch/transformers not installed)")
 	portfolio = get_portfolio_data()
 	data = _gather_market_snapshot([h.get("ticker") for h in portfolio.get("holdings", [])] or None)
 	try:
