@@ -1,3 +1,5 @@
+<img width="864" height="1184" alt="magmaLogo" src="https://github.com/user-attachments/assets/fcb3c0a1-bcf8-4801-ba95-d52f82bc57f5" />
+
 Welcome to innovation in the individual investment world.
 
 <b> The Market Advisor for Gains using Machine Algorithms (<i>MAGMA</i>)</b>
