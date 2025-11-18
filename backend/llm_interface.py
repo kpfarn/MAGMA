@@ -122,7 +122,17 @@ class LLMInterface:
         inputs = self._build_inputs(data, portfolio)
         prompt = self._to_chat(inputs)
 
-        enc = self.tokenizer(prompt, return_tensors='pt')
+        max_ctx = getattr(self.tokenizer, 'model_max_length', 1024)
+        if isinstance(max_ctx, int) and max_ctx > 0:
+            ctx_limit = max_ctx
+        else:
+            ctx_limit = 1024
+        enc = self.tokenizer(
+            prompt,
+            return_tensors='pt',
+            truncation=True,
+            max_length=ctx_limit,
+        )
         enc = {k: v.to(self.model.device) for k, v in enc.items()}
 
         gen_ids = self.model.generate(
