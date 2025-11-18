@@ -1,5 +1,4 @@
-<img width="1152" height="896" alt="magmaLogo" src="https://github.com/user-attachments/assets/d9fda2d4-68b9-4175-b88d-6d2af4d181a9" />
-
+<img width="115" height="81" alt="magmaLogo" src="https://github.com/user-attachments/assets/4f097148-e797-4b72-87f5-b7de3c787912" />
 
 Welcome to innovation in the individual investment world.
 
