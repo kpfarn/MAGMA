@@ -75,8 +75,10 @@ def _gather_market_snapshot(symbols: Optional[List[str]] = None) -> Dict[str, An
 	# Persist fetched prices so portfolio PnL can use latest closes
 	try:
 		dp.upsert_prices(prices)
-	except Exception:
-		pass
+	except Exception as e:
+		# Log error but don't fail the request if price persistence fails
+		import logging
+		logging.getLogger(__name__).warning(f"Failed to persist prices: {e}")
 	# Convert to dicts grouped by symbol
 	buckets: Dict[str, List[Dict[str, Any]]] = {}
 	for b in prices:
@@ -125,7 +127,9 @@ def get_recommendations_endpoint() -> Dict[str, Any]:
 	if llm is None:
 		raise HTTPException(status_code=503, detail="LLM module not available (torch/transformers not installed)")
 	portfolio = get_portfolio_data()
-	data = _gather_market_snapshot([h.get("ticker") for h in portfolio.get("holdings", [])] or None)
+	# Extract tickers, filter out None values, and use None if empty list
+	tickers = [h.get("ticker") for h in portfolio.get("holdings", []) if h.get("ticker")]
+	data = _gather_market_snapshot(tickers if tickers else None)
 	try:
 		resp = llm.get_recommendations(data=data, portfolio=portfolio)
 	except Exception as e:

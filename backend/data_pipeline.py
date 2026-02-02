@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
 from contextlib import contextmanager
@@ -11,6 +12,8 @@ import feedparser
 import pandas as pd
 import requests
 import time
+
+_logger = logging.getLogger(__name__)
 
 try:
 	import yaml  # type: ignore
@@ -174,12 +177,13 @@ def _fetch_prices_finnhub(symbols: List[str]) -> List[PriceBar]:
 						low=float(l[i] or 0.0),
 						close=float(c[i] or 0.0),
 						adj_close=float(c[i] or 0.0),
-						volume=int(v[i] or 0),
-					)
+					volume=int(v[i] or 0),
 				)
-		except Exception:
-			continue
-	return all_bars
+			)
+	except Exception as e:
+		_logger.warning(f"Failed to fetch prices for {symbol} from Finnhub: {e}")
+		continue
+return all_bars
 
 
 def _fetch_prices_twelvedata(symbols: List[str]) -> List[PriceBar]:
@@ -208,12 +212,13 @@ def _fetch_prices_twelvedata(symbols: List[str]) -> List[PriceBar]:
 						low=float(row.get("low", 0.0) or 0.0),
 						close=float(row.get("close", 0.0) or 0.0),
 						adj_close=float(row.get("close", 0.0) or 0.0),
-						volume=int(float(row.get("volume", 0) or 0)),
-					)
+					volume=int(float(row.get("volume", 0) or 0)),
 				)
-		except Exception:
-			continue
-	return all_bars
+			)
+	except Exception as e:
+		_logger.warning(f"Failed to fetch prices for {symbol} from TwelveData: {e}")
+		continue
+return all_bars
 
 
 def upsert_prices(bars: List[PriceBar]) -> int:
@@ -259,14 +264,16 @@ def fetch_fundamentals(symbol: str) -> Dict[str, Any]:
 			resp = requests.get("https://finnhub.io/api/v1/stock/profile2", params={"symbol": symbol, "token": api_key}, timeout=20)
 			resp.raise_for_status()
 			profile = resp.json() or {}
-		except Exception:
+		except Exception as e:
+			_logger.debug(f"Failed to fetch profile for {symbol} from Finnhub: {e}")
 			profile = {}
 		metrics = {}
 		try:
 			resp = requests.get("https://finnhub.io/api/v1/stock/metric", params={"symbol": symbol, "metric": "all", "token": api_key}, timeout=20)
 			resp.raise_for_status()
 			metrics = (resp.json() or {}).get("metric", {}) or {}
-		except Exception:
+		except Exception as e:
+			_logger.debug(f"Failed to fetch metrics for {symbol} from Finnhub: {e}")
 			metrics = {}
 		mapped = {
 			"market_cap": _safe_float(profile.get("marketCapitalization")) or _safe_float(metrics.get("marketCapitalization")),
@@ -288,7 +295,8 @@ def fetch_fundamentals(symbol: str) -> Dict[str, Any]:
 			"name": q.get("name"),
 		}
 		return {k: v for k, v in mapped.items() if v is not None}
-	except Exception:
+	except Exception as e:
+		_logger.debug(f"Failed to fetch quote for {symbol} from TwelveData: {e}")
 		return {}
 
 
@@ -363,7 +371,8 @@ def fetch_news_rss(feeds: Optional[List[str]] = None, symbols: Optional[List[str
 					"summary": summary,
 					"source": source,
 				})
-		except Exception:
+		except Exception as e:
+			_logger.warning(f"Failed to parse RSS feed {url}: {e}")
 			continue
 	# Optionally attempt naive symbol tagging
 	if symbols:

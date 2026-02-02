@@ -74,12 +74,21 @@ class LLMInterface:
         
         # Apply dynamic quantization to reduce model size
         try:
-            self.model = torch.quantization.quantize_dynamic(
-                self.model, {torch.nn.Linear}, dtype=torch.qint8
-            )
-        except Exception:
+            # Try new API first (PyTorch 2.0+), fallback to old API
+            try:
+                from torch.ao.quantization import quantize_dynamic
+                self.model = quantize_dynamic(
+                    self.model, {torch.nn.Linear}, dtype=torch.qint8
+                )
+            except ImportError:
+                # Fallback to deprecated API for older PyTorch versions
+                self.model = torch.quantization.quantize_dynamic(
+                    self.model, {torch.nn.Linear}, dtype=torch.qint8
+                )
+        except Exception as e:
             # If quantization fails, continue without it
-            pass
+            import logging
+            logging.getLogger(__name__).warning(f"Quantization failed, continuing without it: {e}")
 
     def _build_inputs(self, data: Dict[str, Any], portfolio: Dict[str, Any]) -> Dict[str, Any]:
         return {
@@ -133,7 +142,9 @@ class LLMInterface:
             truncation=True,
             max_length=ctx_limit,
         )
-        enc = {k: v.to(self.model.device) for k, v in enc.items()}
+        # Get device from model (handle quantized models that might not have .device)
+        device = next(self.model.parameters()).device if hasattr(self.model, 'parameters') and next(iter(self.model.parameters()), None) is not None else torch.device('cpu')
+        enc = {k: v.to(device) for k, v in enc.items()}
 
         gen_ids = self.model.generate(
             **enc,
