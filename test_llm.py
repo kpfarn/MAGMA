@@ -5,9 +5,22 @@ Test script to verify LLM configuration and basic functionality
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
-from backend.llm_interface import LLMInterface
+# Add project root to path
+project_root = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, project_root)
+
+# Try importing as package first, then fallback to direct import
+try:
+    from backend.llm_interface import LLMInterface
+except ImportError:
+    # Fallback for direct execution
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("llm_interface", os.path.join(project_root, "backend", "llm_interface.py"))
+    llm_module = importlib.util.module_from_spec(spec)
+    sys.modules["llm_interface"] = llm_module
+    spec.loader.exec_module(llm_module)
+    LLMInterface = llm_module.LLMInterface
 
 def test_llm_config():
     print("Testing LLM configuration...")

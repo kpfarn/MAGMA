@@ -177,13 +177,13 @@ def _fetch_prices_finnhub(symbols: List[str]) -> List[PriceBar]:
 						low=float(l[i] or 0.0),
 						close=float(c[i] or 0.0),
 						adj_close=float(c[i] or 0.0),
-					volume=int(v[i] or 0),
+						volume=int(v[i] or 0),
+					)
 				)
-			)
-	except Exception as e:
-		_logger.warning(f"Failed to fetch prices for {symbol} from Finnhub: {e}")
-		continue
-return all_bars
+		except Exception as e:
+			_logger.warning(f"Failed to fetch prices for {symbol} from Finnhub: {e}")
+			continue
+	return all_bars
 
 
 def _fetch_prices_twelvedata(symbols: List[str]) -> List[PriceBar]:
@@ -212,13 +212,13 @@ def _fetch_prices_twelvedata(symbols: List[str]) -> List[PriceBar]:
 						low=float(row.get("low", 0.0) or 0.0),
 						close=float(row.get("close", 0.0) or 0.0),
 						adj_close=float(row.get("close", 0.0) or 0.0),
-					volume=int(float(row.get("volume", 0) or 0)),
+						volume=int(float(row.get("volume", 0) or 0)),
+					)
 				)
-			)
-	except Exception as e:
-		_logger.warning(f"Failed to fetch prices for {symbol} from TwelveData: {e}")
-		continue
-return all_bars
+		except Exception as e:
+			_logger.warning(f"Failed to fetch prices for {symbol} from TwelveData: {e}")
+			continue
+	return all_bars
 
 
 def upsert_prices(bars: List[PriceBar]) -> int:

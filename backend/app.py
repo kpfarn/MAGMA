@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 try:
 	import yaml  # type: ignore
@@ -44,6 +49,21 @@ app.add_middleware(
 )
 
 
+@app.get("/")
+def root() -> Dict[str, str]:
+	return {
+		"message": "MAGMA API is running",
+		"docs": "/docs",
+		"frontend": "http://localhost:3000",
+		"endpoints": {
+			"health": "/health",
+			"news": "/news",
+			"portfolio": "/portfolio",
+			"recommendations": "/recommendations",
+			"refresh": "/refresh (POST)",
+		}
+	}
+
 @app.get("/health")
 def health() -> Dict[str, str]:
 	return {"status": "ok"}
@@ -77,8 +97,7 @@ def _gather_market_snapshot(symbols: Optional[List[str]] = None) -> Dict[str, An
 		dp.upsert_prices(prices)
 	except Exception as e:
 		# Log error but don't fail the request if price persistence fails
-		import logging
-		logging.getLogger(__name__).warning(f"Failed to persist prices: {e}")
+		logger.warning(f"Failed to persist prices: {e}")
 	# Convert to dicts grouped by symbol
 	buckets: Dict[str, List[Dict[str, Any]]] = {}
 	for b in prices:
@@ -125,22 +144,31 @@ def refresh_data(symbols: Optional[List[str]] = None) -> Dict[str, Any]:
 @app.get("/recommendations")
 def get_recommendations_endpoint() -> Dict[str, Any]:
 	if llm is None:
+		logger.error("LLM module not available")
 		raise HTTPException(status_code=503, detail="LLM module not available (torch/transformers not installed)")
-	portfolio = get_portfolio_data()
-	# Extract tickers, filter out None values, and use None if empty list
-	tickers = [h.get("ticker") for h in portfolio.get("holdings", []) if h.get("ticker")]
-	data = _gather_market_snapshot(tickers if tickers else None)
+	
 	try:
+		portfolio = get_portfolio_data()
+		# Extract tickers, filter out None values, and use None if empty list
+		tickers = [h.get("ticker") for h in portfolio.get("holdings", []) if h.get("ticker")]
+		logger.info(f"Generating recommendations for portfolio with {len(tickers)} holdings")
+		data = _gather_market_snapshot(tickers if tickers else None)
+		
 		resp = llm.get_recommendations(data=data, portfolio=portfolio)
+		logger.info(f"Recommendations generated successfully using model: {resp.get('model', 'unknown')}")
+		
+		# Log conversation meta in JSONL (no PII beyond portfolio symbols/holdings as provided)
+		append_jsonl({
+			"event": "recommendations",
+			"request": {"symbols": list(data.get("prices", {}).keys()), "holdings": portfolio.get("holdings", [])},
+			"response": {"model": resp.get("model"), "text": resp.get("text", "")},
+		})
+		return {"model": resp.get("model"), "text": resp.get("text", ""), "recommendations": []}
+	except HTTPException:
+		raise
 	except Exception as e:
-		raise HTTPException(status_code=500, detail=f"LLM error: {e}")
-	# Log conversation meta in JSONL (no PII beyond portfolio symbols/holdings as provided)
-	append_jsonl({
-		"event": "recommendations",
-		"request": {"symbols": list(data.get("prices", {}).keys()), "holdings": portfolio.get("holdings", [])},
-		"response": {"model": resp.get("model"), "text": resp.get("text", "")},
-	})
-	return {"model": resp.get("model"), "text": resp.get("text", ""), "recommendations": []}
+		logger.error(f"Error generating recommendations: {e}", exc_info=True)
+		raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
 
 
 if __name__ == "__main__":

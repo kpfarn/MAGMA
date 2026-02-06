@@ -78,6 +78,64 @@ enc = {k: v.to(device) for k, v in enc.items()}
 
 ---
 
+---
+
+### 6. Fixed Syntax Errors in `data_pipeline.py`
+**Issue**: Indentation errors in exception handlers caused syntax errors that prevented the app from loading.
+
+**Fix**: Corrected indentation for exception handlers in `_fetch_prices_finnhub()` and `_fetch_prices_twelvedata()` functions.
+
+**Impact**: The application can now start successfully.
+
+---
+
+### 7. Improved Context Limit Calculation in `llm_interface.py`
+**Issue**: Context limit calculation was too restrictive and could cause generation failures.
+
+**Fix**: Improved the context limit calculation to:
+- Use model's `max_position_embeddings` as the hard limit
+- Reserve 20% of context for generation (minimum 256 tokens)
+- Better fallback handling for different model configurations
+
+**Impact**: More reliable text generation with proper context window management.
+
+---
+
+### 8. Enhanced Error Handling and Logging in `app.py`
+**Issue**: Limited error visibility and logging made debugging difficult.
+
+**Fix**: Added:
+- Proper logging configuration
+- Better error messages with context
+- More informative logging for recommendations endpoint
+- Proper exception handling that preserves HTTP exceptions
+
+**Impact**: Better observability and easier debugging of production issues.
+
+---
+
+### 9. Improved Device Detection in `llm_interface.py`
+**Issue**: Device detection logic was complex and could fail with quantized models.
+
+**Fix**: Simplified device detection with proper exception handling:
+```python
+try:
+    if hasattr(self.model, 'parameters'):
+        params = list(self.model.parameters())
+        if params:
+            device = params[0].device
+        else:
+            device = torch.device('cpu')
+    else:
+        device = torch.device('cpu')
+except Exception:
+    device = torch.device('cpu')
+```
+
+**Impact**: More robust device handling across different model configurations.
+
+---
+
 ## Summary
 
 All identified bugs have been fixed:
@@ -86,6 +144,10 @@ All identified bugs have been fixed:
 - ✅ Deprecated API usage (with backward compatibility)
 - ✅ Device mapping issues with quantized models
 - ✅ Missing error logging throughout data pipeline
+- ✅ Syntax errors in data pipeline
+- ✅ Context limit calculation improvements
+- ✅ Enhanced error handling and logging
+- ✅ Improved device detection
 
 No changes were made to:
 - `sys_prompt.txt` (as requested)

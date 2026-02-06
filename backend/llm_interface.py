@@ -61,9 +61,10 @@ class LLMInterface:
 
     def load(self) -> None:
         # Optimized for minimal disk usage
+        # Load in float32 first (required for quantization), then quantize
         load_kwargs: Dict[str, Any] = {
             "device_map": "cpu",  # Force CPU usage to save space
-            "torch_dtype": torch.float16,  # Use half precision to save memory
+            "dtype": torch.float32,  # Use float32 for quantization compatibility
             "low_cpu_mem_usage": True,  # Optimize memory usage
         }
 
@@ -73,6 +74,7 @@ class LLMInterface:
         self.model = AutoModelForCausalLM.from_pretrained(self.model_id, **load_kwargs)
         
         # Apply dynamic quantization to reduce model size
+        # Note: Quantization requires float32 input, not float16
         try:
             # Try new API first (PyTorch 2.0+), fallback to old API
             try:
@@ -131,11 +133,24 @@ class LLMInterface:
         inputs = self._build_inputs(data, portfolio)
         prompt = self._to_chat(inputs)
 
-        max_ctx = getattr(self.tokenizer, 'model_max_length', 1024)
-        if isinstance(max_ctx, int) and max_ctx > 0:
-            ctx_limit = max_ctx
+        # Get model's actual max position embeddings (more reliable than tokenizer's model_max_length)
+        max_pos = getattr(self.model.config, 'max_position_embeddings', None)
+        tokenizer_max = getattr(self.tokenizer, 'model_max_length', None)
+        
+        # Determine the actual context limit
+        if max_pos is not None and isinstance(max_pos, int) and max_pos > 0:
+            # Use model's max position embeddings as the hard limit
+            ctx_limit = max_pos
+            # Reserve tokens for generation (keep at least 20% for generation)
+            ctx_limit = max(256, int(ctx_limit * 0.8))
+        elif tokenizer_max is not None and isinstance(tokenizer_max, int) and tokenizer_max > 0:
+            ctx_limit = tokenizer_max
+            # Reserve tokens for generation
+            ctx_limit = max(256, ctx_limit - self.max_tokens - 50)
         else:
-            ctx_limit = 1024
+            # Conservative default for small models
+            ctx_limit = 512
+        
         enc = self.tokenizer(
             prompt,
             return_tensors='pt',
@@ -143,7 +158,17 @@ class LLMInterface:
             max_length=ctx_limit,
         )
         # Get device from model (handle quantized models that might not have .device)
-        device = next(self.model.parameters()).device if hasattr(self.model, 'parameters') and next(iter(self.model.parameters()), None) is not None else torch.device('cpu')
+        try:
+            if hasattr(self.model, 'parameters'):
+                params = list(self.model.parameters())
+                if params:
+                    device = params[0].device
+                else:
+                    device = torch.device('cpu')
+            else:
+                device = torch.device('cpu')
+        except Exception:
+            device = torch.device('cpu')
         enc = {k: v.to(device) for k, v in enc.items()}
 
         gen_ids = self.model.generate(
